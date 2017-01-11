@@ -4,35 +4,21 @@
 BigNumber::BigNumber()
 {
     //Not much, we initialize both of the numbers to 0
-    decimalPart.push_back(0);
-    intPart.push_back(0);
+    changeDecimalPart("0");
+    changeIntPart("0");
 }
 
 BigNumber::BigNumber(std::string const& numberToTake)
 {
-    for (auto it = numberToTake.begin() ; it != numberToTake.end() ; it++)
-    {
-        if (*it != '0' && *it != '1' && *it != '2' && *it != '3' &&
-           *it != '4' && *it != '5' && *it != '6' && *it != '7' &&
-           *it != '8' && *it != '9')
-        {
-            std::cout << "Error from constructor : The number contains non-number characters !\n";
-            std::cout << "Faulty character found : " << *it << '\n';
-            throw "Error from constructor : The number contains non-number characters !\n";
-        }
-    }
-
-}
-
-BigNumber::BigNumber(std::string&& numberToTake)
-{
     lastDecimalPartPower = 0;
 
-    //We first check if there is any
+    //We first check if there is any non-numerical character
     if (!checkStringIntegrity(numberToTake))
     {
         std::cout << "Error from constructor : The number contains non-number characters !\n";
-        throw "Non-numbers characters\n";
+        changeDecimalPart("0");
+        changeIntPart("0");
+        return;
     }
 
     switch (std::count(numberToTake.begin(), numberToTake.end(), '.'))
@@ -74,7 +60,65 @@ BigNumber::BigNumber(std::string&& numberToTake)
     default:
         std::cout << "Error from constructor : Multiple decimal points found (found "
                   << std::count(numberToTake.begin(), numberToTake.end(), '.') << ")\n";
-        throw "Multiple decimal points\n";
+        changeDecimalPart("0");
+        changeIntPart("0");
+        break;
+    }
+}
+
+BigNumber::BigNumber(std::string&& numberToTake)
+{
+    lastDecimalPartPower = 0;
+
+    if (!checkStringIntegrity(numberToTake))
+    {
+        std::cout << "Error from constructor : The number contains non-number characters !\n";
+        changeDecimalPart("0");
+        changeIntPart("0");
+        return;
+    }
+
+    switch (std::count(numberToTake.begin(), numberToTake.end(), '.'))
+    {
+    case 0:
+        changeDecimalPart("0");
+
+        try{
+            changeIntPart(numberToTake);
+        }catch (std::string const& ex){
+            std::cout << "Error in constructor : " << ex << "\nGenerating an empty intPart\n";
+            changeIntPart("0");
+        }
+
+        break;
+    case 1:
+        std::string decimalString;
+        std::string intString;
+
+        std::size_t dotPosition = numberToTake.find(".");
+        intString = numberToTake.substr(0, dotPosition);
+        decimalString = numberToTake.substr(dotPosition + 1);
+
+        try{
+            changeIntPart(intString);
+        }catch (std::string const& ex){
+            std::cout << "Error in constructor : " << ex << "\nGenerating an empty intPart\n";
+            changeIntPart("0");
+        }
+
+        try{
+            changeDecimalPart(decimalString);
+        }catch (std::string const& ex){
+            std::cout << "Error in constructor : " << ex << "\nGenerating an empty decimalPart\n";
+            changeDecimalPart("0");
+        }
+
+        break;
+    default:
+        std::cout << "Error from constructor : Multiple decimal points found (found "
+                  << std::count(numberToTake.begin(), numberToTake.end(), '.') << ")\n";
+        changeDecimalPart("0");
+        changeIntPart("0");
         break;
     }
 }
@@ -206,6 +250,54 @@ void BigNumber::changeDecimalPart(std::string const& newDecimalPart)
     }
 }
 
+void BigNumber::changeNumber(std::string newNumber)
+{
+    if (!checkStringIntegrity(newNumber))
+    {
+        std::cout << "Error from changeNumber : The number contains non-number characters !\n";
+        return;
+    }
+
+    switch (std::count(newNumber.begin(), newNumber.end(), '.'))
+    {
+    case 0: //Only an integer !
+        changeDecimalPart("0");//Not needed, so we put it to 0
+
+        try{
+            changeIntPart(newNumber);
+        }catch (std::string const& ex){
+            std::cout << "Error in changeNumber : " << ex << "\nGenerating an empty intPart\n";
+        }
+
+        break;
+    case 1: //Both
+        std::string decimalString;
+        std::string intString;
+
+        std::size_t dotPosition = newNumber.find(".");
+        intString = newNumber.substr(0, dotPosition);
+        decimalString = newNumber.substr(dotPosition + 1);
+
+        try{
+            changeIntPart(intString);
+        }catch (std::string const& ex){
+            std::cout << "Error in changeNumber : " << ex << "\nGenerating an empty intPart\n";
+        }
+
+        try{
+            changeDecimalPart(decimalString);
+        }catch (std::string const& ex){
+            std::cout << "Error in changeNumber : " << ex << "\nGenerating an empty decimalPart\n";
+        }
+
+        break;
+    default:
+        std::cout << "Error from changeNumber : Multiple decimal points found (found "
+                  << std::count(newNumber.begin(), newNumber.end(), '.') << ")\n";
+        break;
+    }
+}
+
 bool BigNumber::checkStringIntegrity(std::string const& toTest)
 {
     for (auto it = toTest.begin() ; it != toTest.end() ; it++)
@@ -294,14 +386,14 @@ bool BigNumber::writeToFile(std::string filePath)
     std::ofstream writeFile;
     writeFile.open(filePath.c_str());
 
-    if (writeFile.is_open())
-    {
-        writeFile << *this;
-    }
-    else
+    if (!writeFile)
     {
         std::cout << "Error occurred during the file's opening (file name was (" << filePath << "). Failed to write the number\n";
         return false;
+    }
+    else
+    {
+        writeFile << *this;
     }
 
     return true;
@@ -309,5 +401,20 @@ bool BigNumber::writeToFile(std::string filePath)
 
 bool BigNumber::readFromFile(std::string filePath)
 {
+    std::ifstream fileToRead;
+    fileToRead.open(filePath.c_str());
 
+    if (!fileToRead)
+    {
+        std::cout << "Error : Could not open file " << filePath << ". You should verify the path!\n";
+        return false;
+    }
+    else
+    {
+        std::string readNumber;
+        std::getline(fileToRead, readNumber);
+        changeNumber(readNumber);
+    }
+
+    return true;
 }

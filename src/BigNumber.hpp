@@ -23,6 +23,10 @@ public:
     void changeIntPart(std::string const& newIntPart);
     void changeDecimalPart(std::string const& newDecimalPart);
 
+    //The code is very similar to the one of the constructor, however in case of
+    //error, the BigNumber isn't changed
+    void changeNumber(std::string newNumber);
+
     bool checkStringIntegrity(std::string const& toTest);
 
     friend std::ostream& operator<<(std::ostream& os, const BigNumber& toStream);
