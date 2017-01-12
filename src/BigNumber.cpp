@@ -148,6 +148,8 @@ void BigNumber::changeIntPart(std::string const& newIntPart)
 
     if (stringTreated.size() != 0)
     {
+        numberOfIntegerDigits = stringTreated.size();
+
         std::stringstream takeChunks;
 
         const int rest = stringTreated.size() % MAX_DIGIT_NUMBER;
@@ -175,7 +177,10 @@ void BigNumber::changeIntPart(std::string const& newIntPart)
         }
     }
     else
+    {
+        numberOfIntegerDigits = 1;
         intPart.push_back(0);
+    }
 }
 
 void BigNumber::changeDecimalPart(std::string const& newDecimalPart)
@@ -202,6 +207,8 @@ void BigNumber::changeDecimalPart(std::string const& newDecimalPart)
 
     if (stringTreated.size() != 0)
     {
+        numberOfDecimalDigits = stringTreated.size();
+
         std::stringstream takeChunks;
 
         const int rest = stringTreated.size() % MAX_DIGIT_NUMBER;
@@ -245,6 +252,7 @@ void BigNumber::changeDecimalPart(std::string const& newDecimalPart)
     }
     else
     {
+        numberOfDecimalDigits = 1;
         decimalPart.push_back(0);
         lastDecimalPartPower = 0;
     }
@@ -318,6 +326,60 @@ BigNumber::~BigNumber()
 
 }
 
+bool BigNumber::writeToFile(std::string filePath)
+{
+    std::ofstream writeFile;
+    writeFile.open(filePath.c_str());
+
+    if (!writeFile)
+    {
+        std::cout << "Error occurred during the file's opening (file name was (" << filePath << "). Failed to write the number\n";
+        return false;
+    }
+    else
+    {
+        writeFile << *this;
+    }
+
+    return true;
+}
+
+bool BigNumber::loadFromFile(std::string filePath)
+{
+    std::ifstream fileToRead;
+    fileToRead.open(filePath.c_str());
+
+    if (!fileToRead)
+    {
+        std::cout << "Error : Could not open file " << filePath << ". You should verify the path!\n";
+        return false;
+    }
+    else
+    {
+        std::string readNumber;
+        std::getline(fileToRead, readNumber);
+        changeNumber(readNumber);
+    }
+
+    return true;
+}
+
+short BigNumber::evaluateLastDecimal() const
+{
+    short remainingSpace = MAX_DIGIT_NUMBER - lastDecimalPartPower - 1;
+
+    short lastPart = decimalPart[decimalPart.size() - 1];
+
+    if (lastPart > 9) remainingSpace--;
+    if (lastPart > 99) remainingSpace--;
+    if (lastPart > 999) remainingSpace--;
+
+    for (int i(0) ; i < remainingSpace ; i++)
+        lastPart *= 10;
+
+    return lastPart;
+}
+
 std::ostream& operator<<(std::ostream& os, const BigNumber& toStream)
 {
     os << *toStream.intPart.rbegin();
@@ -381,40 +443,133 @@ std::ostream& operator<<(std::ostream& os, const BigNumber& toStream)
     return os;
 }
 
-bool BigNumber::writeToFile(std::string filePath)
+bool operator<(BigNumber const& comp1, BigNumber const& comp2)
 {
-    std::ofstream writeFile;
-    writeFile.open(filePath.c_str());
-
-    if (!writeFile)
+    //We first compare the size of the integers parts
+    if (comp1.numberOfIntegerDigits < comp2.numberOfIntegerDigits)
     {
-        std::cout << "Error occurred during the file's opening (file name was (" << filePath << "). Failed to write the number\n";
+        return true;
+    }
+    else if (comp1.numberOfIntegerDigits > comp2.numberOfIntegerDigits)
+    {
         return false;
     }
     else
     {
-        writeFile << *this;
+        //Then, we compare the actual integer parts
+        for (int i(0) ; i < comp1.intPart.size() ; i++)
+        {
+            if (comp1.intPart[i] < comp2.intPart[i])
+            {
+                return true;
+            }
+            else if (comp1.intPart[i] > comp2.intPart[i])
+            {
+                return false;
+            }
+        }
+
+        //If this didn't give any results, we pass on to the decimal part
+        if (comp1.decimalPart.size() < comp2.decimalPart.size())
+        {
+            for (int i(0);i<comp1.decimalPart.size() - 1;i++)
+            {
+                std::cout << i << '\n';
+                 if (comp1.decimalPart[i] < comp2.decimalPart[i])
+                    return true;
+                 else if (comp1.decimalPart[i] > comp2.decimalPart[i])
+                    return false;
+            }
+
+            short lastValue1 = comp1.evaluateLastDecimal();
+
+            if (lastValue1 < comp2.decimalPart[comp1.decimalPart.size() - 1])
+                return true;
+            else if (lastValue1 > comp2.decimalPart[comp1.decimalPart.size() - 1])
+                return false;
+            else
+                return true;
+        }
+        else if (comp1.decimalPart.size() > comp2.decimalPart.size())
+        {
+            for (int i(0);i<comp2.decimalPart.size() - 1;i++)
+            {
+                 if (comp1.decimalPart[i] < comp2.decimalPart[i])
+                    return true;
+                 else if (comp1.decimalPart[i] > comp2.decimalPart[i])
+                    return false;
+            }
+
+            short lastValue2 = comp2.evaluateLastDecimal();
+
+            if (lastValue2 < comp1.decimalPart[comp1.decimalPart.size() - 1])
+                return false;
+            else if (lastValue2 > comp1.decimalPart[comp1.decimalPart.size() - 1])
+                return true;
+            else
+                return false;
+        }
+        else
+        { //They both have the same size
+            for (int i(0);i<comp1.decimalPart.size() - 1;i++)
+            {
+                std::cout << comp1.decimalPart[i] << ',' << comp2.decimalPart[i] << '\n';
+                 if (comp1.decimalPart[i] < comp2.decimalPart[i])
+                    return true;
+                 else if (comp1.decimalPart[i] > comp2.decimalPart[i])
+                    return false;
+            }
+
+            if (comp1.evaluateLastDecimal() < comp2.evaluateLastDecimal())
+                return true;
+            else
+                return false;
+        }
+    }
+
+    return false;
+}
+
+bool operator==(BigNumber const& comp1, BigNumber const& comp2)
+{
+    if ((comp1.numberOfIntegerDigits != comp2.numberOfIntegerDigits) ||
+        (comp1.numberOfDecimalDigits != comp2.numberOfDecimalDigits))
+    {
+        return false;
+    }
+    else
+    {
+        for (int i(0) ; i < comp1.intPart.size() ; i++)
+            if (comp1.intPart[i] != comp2.intPart[i])
+                return false;
+
+        for (int i(0) ; i < comp1.decimalPart.size() ; i++)
+            if (comp1.decimalPart[i] != comp2.decimalPart[i])
+                return false;
+
+        if (comp1.lastDecimalPartPower != comp2.lastDecimalPartPower)
+            return false;
     }
 
     return true;
 }
 
-bool BigNumber::readFromFile(std::string filePath)
+bool operator>(BigNumber const& comp1, BigNumber const& comp2)
 {
-    std::ifstream fileToRead;
-    fileToRead.open(filePath.c_str());
+    return !((comp1 < comp2) || (comp1 == comp2));
+}
 
-    if (!fileToRead)
-    {
-        std::cout << "Error : Could not open file " << filePath << ". You should verify the path!\n";
-        return false;
-    }
-    else
-    {
-        std::string readNumber;
-        std::getline(fileToRead, readNumber);
-        changeNumber(readNumber);
-    }
+bool operator<=(BigNumber const& comp1, BigNumber const& comp2)
+{
+    return ((comp1 < comp2) || (comp1 == comp2));
+}
 
-    return true;
+bool operator>=(BigNumber const& comp1, BigNumber const& comp2)
+{
+    return !(comp1 < comp2);
+}
+
+bool operator!=(BigNumber const& comp1, BigNumber const& comp2)
+{
+    return !(comp1 == comp2);
 }

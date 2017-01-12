@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <sstream>
 #include <fstream>
+#include <cmath>
 
 #define MAX_DIGIT_NUMBER 4//Defines the maximum number of digits of one space of the vector
 
@@ -18,7 +19,7 @@ public:
     ~BigNumber();
 
     bool writeToFile(std::string filePath);//For testing shenanigans
-    bool readFromFile(std::string filePath);
+    bool loadFromFile(std::string filePath);
 
     void changeIntPart(std::string const& newIntPart);
     void changeDecimalPart(std::string const& newDecimalPart);
@@ -29,6 +30,14 @@ public:
 
     bool checkStringIntegrity(std::string const& toTest);
 
+    short evaluateLastDecimal() const;
+
+    friend bool operator<(BigNumber const& comp1, BigNumber const& comp2);
+    friend bool operator==(BigNumber const& comp1, BigNumber const& comp2);
+    friend bool operator>(BigNumber const& comp1, BigNumber const& comp2);
+    friend bool operator<=(BigNumber const& comp1, BigNumber const& comp2);
+    friend bool operator>=(BigNumber const& comp1, BigNumber const& comp2);
+    friend bool operator!=(BigNumber const& comp1, BigNumber const& comp2);
     friend std::ostream& operator<<(std::ostream& os, const BigNumber& toStream);
 private:
     /**Each short contains a value ranging from 0 to 9999.
@@ -47,6 +56,9 @@ private:
     std::vector<short> decimalPart;
     short lastDecimalPartPower;//Used to determine number of zero before the last part
     std::vector<short> intPart;
+
+    long numberOfIntegerDigits;
+    long numberOfDecimalDigits;
 };
 
 #endif // BIGNUMBER_HPP_INCLUDED
