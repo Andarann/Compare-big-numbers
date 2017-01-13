@@ -258,6 +258,79 @@ void BigNumber::changeDecimalPart(std::string const& newDecimalPart)
     }
 }
 
+std::string BigNumber::getString(int digitNumber) const
+{
+    std::stringstream toReturn;
+    toReturn << *this;
+
+    if (digitNumber == -1)
+        return toReturn.str();
+    else
+        return toReturn.str().substr(0, digitNumber);
+}
+
+short BigNumber::getPowerOfTenDigit(int powerOfTen) const
+{
+    short value(0);
+    //Each is as follow : n,n-1...2,1,0(<- int decimal ->)-1,-2...
+    if (powerOfTen < 0) //Is decimal
+    {
+        int digitSeeked = std::abs(powerOfTen) - 1;
+
+        if (digitSeeked >= numberOfDecimalDigits) //Non-defined digits
+            return 0;
+        else
+        {
+            if (decimalPart.size() - 1 > (digitSeeked / MAX_DIGIT_NUMBER))
+            {
+                value = decimalPart[digitSeeked / MAX_DIGIT_NUMBER];
+            }
+            else
+            {
+                value = evaluateLastDecimal();
+            }
+
+            short bigPart = 0;
+            short smallPart = 0;
+            int tempPowerOfTen = 1;
+            digitSeeked = MAX_DIGIT_NUMBER - (std::abs(powerOfTen) % MAX_DIGIT_NUMBER);
+
+            for (int i(0); i < digitSeeked % MAX_DIGIT_NUMBER ; i++)
+                tempPowerOfTen *= 10;
+
+            smallPart = value % tempPowerOfTen;
+            tempPowerOfTen *= 10;
+            bigPart = value - (value % tempPowerOfTen);
+
+            return ((value - smallPart - bigPart) / (tempPowerOfTen / 10));
+        }
+    }
+    else //Is integer
+    {
+        if (powerOfTen >= numberOfIntegerDigits) //Non-defined digits
+            return 0;
+        else
+        {
+            value = intPart[powerOfTen / MAX_DIGIT_NUMBER];
+
+            short bigPart = 0;
+            short smallPart = 0;
+            int tempPowerOfTen = 1;
+
+            for (int i(0); i < powerOfTen % MAX_DIGIT_NUMBER ; i++)
+                tempPowerOfTen *= 10;
+
+            smallPart = value % tempPowerOfTen;
+            tempPowerOfTen *= 10;
+            bigPart = value - (value % tempPowerOfTen);
+
+            return ((value - smallPart - bigPart) / (tempPowerOfTen / 10));
+        }
+    }
+
+    return value;
+}
+
 void BigNumber::changeNumber(std::string newNumber)
 {
     if (!checkStringIntegrity(newNumber))
@@ -344,7 +417,7 @@ bool BigNumber::writeToFile(std::string filePath)
     return true;
 }
 
-bool BigNumber::loadFromFile(std::string filePath)
+bool BigNumber::loadFromFile(std::string filePath, unsigned int numberIndex)
 {
     std::ifstream fileToRead;
     fileToRead.open(filePath.c_str());
@@ -357,11 +430,47 @@ bool BigNumber::loadFromFile(std::string filePath)
     else
     {
         std::string readNumber;
-        std::getline(fileToRead, readNumber);
+
+        for (int i(0) ; i <= numberIndex ; i++)
+        {
+            if (fileToRead.eof())
+            {
+                break;
+            }
+            else
+                std::getline(fileToRead, readNumber);
+        }
+
         changeNumber(readNumber);
     }
 
     return true;
+}
+
+static int BigNumber::numberQuantityInFile(std::string filePath)
+{
+    int quantity(0);
+
+    std::ifstream fileToRead;
+    std::string trash;
+
+    fileToRead.open(filePath.c_str());
+
+    if (!fileToRead)
+    {
+        std::cout << "Error : Could not open file " << filePath << ". You should verify the path!\n";
+        throw "File opening failed";
+    }
+    else
+    {
+        while (!fileToRead.eof())
+        {
+            std::getline(fileToRead, trash);
+            quantity++;
+        }
+    }
+
+    return quantity;
 }
 
 short BigNumber::evaluateLastDecimal() const
@@ -474,7 +583,6 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
         {
             for (int i(0);i<comp1.decimalPart.size() - 1;i++)
             {
-                std::cout << i << '\n';
                  if (comp1.decimalPart[i] < comp2.decimalPart[i])
                     return true;
                  else if (comp1.decimalPart[i] > comp2.decimalPart[i])
@@ -513,7 +621,6 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
         { //They both have the same size
             for (int i(0);i<comp1.decimalPart.size() - 1;i++)
             {
-                std::cout << comp1.decimalPart[i] << ',' << comp2.decimalPart[i] << '\n';
                  if (comp1.decimalPart[i] < comp2.decimalPart[i])
                     return true;
                  else if (comp1.decimalPart[i] > comp2.decimalPart[i])
@@ -573,3 +680,157 @@ bool operator!=(BigNumber const& comp1, BigNumber const& comp2)
 {
     return !(comp1 == comp2);
 }
+
+BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2)
+{
+    BigNumber finalNumber;
+
+    short remainingDecimalValue(0);
+
+    //We first evaluate the decimal part
+    if (comp1.decimalPart.size() < comp2.decimalPart.size())
+    {
+        finalNumber.decimalPart = comp2.decimalPart;
+        finalNumber.lastDecimalPartPower = comp2.lastDecimalPartPower;
+
+        for (int i(comp1.decimalPart.size() - 1) ; i >= 1 ; i--)//We live room for 0
+        {
+            finalNumber.decimalPart[i] += comp1.decimalPart[i];
+
+            if (finalNumber.decimalPart[i] > 9999)
+            {
+                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
+            }
+        }
+
+        finalNumber.decimalPart[0] += comp1.evaluateLastDecimal();
+        if (finalNumber.decimalPart[0] > 9999)
+        {
+            remainingDecimalValue = (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000))/ 10000;
+            finalNumber.decimalPart[0] -= (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000));
+        }
+    }
+    else if (comp1.decimalPart.size() > comp2.decimalPart.size())
+    {
+        finalNumber.decimalPart = comp1.decimalPart;
+        finalNumber.lastDecimalPartPower = comp1.lastDecimalPartPower;
+
+        for (int i(comp2.decimalPart.size() - 1) ; i >= 1 ; i--)//We live room for 0
+        {
+            finalNumber.decimalPart[i] += comp2.decimalPart[i];
+
+            if (finalNumber.decimalPart[i] > 9999)
+            {
+                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
+            }
+        }
+
+        finalNumber.decimalPart[0] += comp2.evaluateLastDecimal();
+        if (finalNumber.decimalPart[0] > 9999)
+        {
+            remainingDecimalValue = (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000))/ 10000;
+            finalNumber.decimalPart[0] -= (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000));
+        }
+    }
+    else //Both have the same size
+    {
+        finalNumber.decimalPart = comp1.decimalPart;
+
+        short lastPart = comp1.evaluateLastDecimal() + comp2.evaluateLastDecimal();
+
+        if (comp1.decimalPart.size() > 1)
+        {
+            if (lastPart > 9999)
+            {
+                finalNumber.decimalPart[finalNumber.decimalPart.size() - 2] += (lastPart - (lastPart % 10000))/ 10000;
+                lastPart -= (lastPart - (lastPart % 10000));
+            }
+
+            finalNumber.decimalPart[finalNumber.decimalPart.size() - 1] = lastPart;
+            finalNumber.lastDecimalPartPower = MAX_DIGIT_NUMBER - static_cast<int>(std::log10(lastPart) + 1);
+        }
+
+        for (int i(comp2.decimalPart.size() - 2) ; i >= 1 ; i--)//We leave room for 0
+        {
+            finalNumber.decimalPart[i] += comp2.decimalPart[i];
+
+            if (finalNumber.decimalPart[i] > 9999)
+            {
+                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
+            }
+        }
+
+        if (comp1.decimalPart.size() == 1)
+        {
+            if (lastPart > 9999)
+            {
+                remainingDecimalValue = (lastPart - (lastPart % 10000))/ 10000;
+                lastPart -= (lastPart - (lastPart % 10000));
+            }
+
+            finalNumber.decimalPart[0] = lastPart;
+            finalNumber.lastDecimalPartPower = MAX_DIGIT_NUMBER - static_cast<int>(std::log10(lastPart) + 1);
+        }
+    }
+
+
+    if (comp1.intPart.size() < comp2.intPart.size())
+    {
+        finalNumber.intPart = comp2.intPart;
+        finalNumber.intPart[0] += remainingDecimalValue;
+
+        const int initialSize = comp1.intPart.size();
+
+        for (int i(0) ; i < initialSize ; i++)
+        {
+            finalNumber.intPart[i] += comp1.intPart[i];
+
+            if (finalNumber.intPart[i] > 9999)
+            {
+                if (i < initialSize - 1)
+                {
+                    finalNumber.intPart[i + 1] += (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000))/ 10000;
+                    finalNumber.intPart[i] -= (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000));
+                }
+                else
+                {
+                    finalNumber.intPart.push_back((finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000))/ 10000);
+                    finalNumber.intPart[i] -= (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000));
+                }
+            }
+        }
+    }
+    else
+    {
+        finalNumber.intPart = comp1.intPart;
+        finalNumber.intPart[0] += remainingDecimalValue;
+
+        const int initialSize = comp2.intPart.size();
+
+        for (int i(0) ; i < initialSize ; i++)
+        {
+            finalNumber.intPart[i] += comp2.intPart[i];
+
+            if (finalNumber.intPart[i] > 9999)
+            {
+                if (i < initialSize - 1)
+                {
+                    finalNumber.intPart[i + 1] += (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000))/ 10000;
+                    finalNumber.intPart[i] -= (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000));
+                }
+                else
+                {
+                    finalNumber.intPart.push_back((finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000))/ 10000);
+                    finalNumber.intPart[i] -= (finalNumber.intPart[i] - (finalNumber.intPart[i] % 10000));
+                }
+            }
+        }
+    }
+
+    return finalNumber;
+}
+
+
