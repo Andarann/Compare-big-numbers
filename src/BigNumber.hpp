@@ -36,6 +36,7 @@ public:
     void changeNumber(std::string newNumber);
 
     bool checkStringIntegrity(std::string const& toTest);
+    bool isNegative;
 
     template<typename A>
     A evaluateBigNumber()//use this template function to have a rough evaluation of the number, using usual types. Be careful of an information loss from output (example : no decimal part with integer evaluations)

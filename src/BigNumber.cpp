@@ -3,6 +3,7 @@
 
 BigNumber::BigNumber()
 {
+    isNegative = false;
     //Not much, we initialize both of the numbers to 0
     changeDecimalPart("0");
     changeIntPart("0");
@@ -10,6 +11,7 @@ BigNumber::BigNumber()
 
 BigNumber::BigNumber(std::string const& numberToTake)
 {
+    isNegative = false;
     lastDecimalPartPower = 0;
 
     //We first check if there is any non-numerical character
@@ -68,6 +70,7 @@ BigNumber::BigNumber(std::string const& numberToTake)
 
 BigNumber::BigNumber(std::string&& numberToTake)
 {
+    isNegative = false;
     lastDecimalPartPower = 0;
 
     if (!checkStringIntegrity(numberToTake))
@@ -335,7 +338,8 @@ void BigNumber::changeNumber(std::string newNumber)
 {
     if (!checkStringIntegrity(newNumber))
     {
-        std::cout << "Error from changeNumber : The number contains non-number characters !\n";
+        //std::cout << "Error from changeNumber : The number contains non-number characters !\n";
+        //std::cout << newNumber << '\n';
         return;
     }
 
@@ -402,7 +406,7 @@ BigNumber::~BigNumber()
 bool BigNumber::writeToFile(std::string filePath)
 {
     std::ofstream writeFile;
-    writeFile.open(filePath.c_str());
+    writeFile.open(filePath.c_str(), std::ios::app);
 
     if (!writeFile)
     {
@@ -411,7 +415,7 @@ bool BigNumber::writeToFile(std::string filePath)
     }
     else
     {
-        writeFile << *this;
+        writeFile << *this << '\n';
     }
 
     return true;
@@ -557,10 +561,12 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
     //We first compare the size of the integers parts
     if (comp1.numberOfIntegerDigits < comp2.numberOfIntegerDigits)
     {
+        //std::cout << "Less integers from first member\n";
         return true;
     }
     else if (comp1.numberOfIntegerDigits > comp2.numberOfIntegerDigits)
     {
+        //std::cout << "Less integers from second member\n";
         return false;
     }
     else
@@ -570,10 +576,12 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
         {
             if (comp1.intPart[i] < comp2.intPart[i])
             {
+                //std::cout << "Found a small int from first member\n";
                 return true;
             }
             else if (comp1.intPart[i] > comp2.intPart[i])
             {
+                //std::cout << "Found a small int from second member\n";
                 return false;
             }
         }
@@ -581,12 +589,15 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
         //If this didn't give any results, we pass on to the decimal part
         if (comp1.decimalPart.size() < comp2.decimalPart.size())
         {
-            for (int i(0);i<comp1.decimalPart.size() - 1;i++)
+            if (comp1.decimalPart.size() > 1)
             {
-                 if (comp1.decimalPart[i] < comp2.decimalPart[i])
-                    return true;
-                 else if (comp1.decimalPart[i] > comp2.decimalPart[i])
-                    return false;
+                for (int i(0);i<comp1.decimalPart.size() - 2;i++)
+                {
+                     if (comp1.decimalPart[i] < comp2.decimalPart[i])
+                        return true;
+                     else if (comp1.decimalPart[i] > comp2.decimalPart[i])
+                        return false;
+                }
             }
 
             short lastValue1 = comp1.evaluateLastDecimal();
@@ -600,19 +611,22 @@ bool operator<(BigNumber const& comp1, BigNumber const& comp2)
         }
         else if (comp1.decimalPart.size() > comp2.decimalPart.size())
         {
-            for (int i(0);i<comp2.decimalPart.size() - 1;i++)
+            if (comp2.decimalPart.size() > 1)
             {
-                 if (comp1.decimalPart[i] < comp2.decimalPart[i])
-                    return true;
-                 else if (comp1.decimalPart[i] > comp2.decimalPart[i])
-                    return false;
+                for (int i(0);i<comp2.decimalPart.size() - 2;i++)
+                {
+                     if (comp2.decimalPart[i] < comp1.decimalPart[i])
+                        return false;
+                     else if (comp2.decimalPart[i] > comp1.decimalPart[i])
+                        return true;
+                }
             }
 
             short lastValue2 = comp2.evaluateLastDecimal();
 
-            if (lastValue2 < comp1.decimalPart[comp1.decimalPart.size() - 1])
+            if (lastValue2 < comp1.decimalPart[comp2.decimalPart.size() - 1])
                 return false;
-            else if (lastValue2 > comp1.decimalPart[comp1.decimalPart.size() - 1])
+            else if (lastValue2 > comp1.decimalPart[comp2.decimalPart.size() - 1])
                 return true;
             else
                 return false;
@@ -683,6 +697,8 @@ bool operator!=(BigNumber const& comp1, BigNumber const& comp2)
 
 BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2)
 {
+    //std::cout << "Numbers in entry are " << comp1.getString(20) << "&" << comp2.getString(20) << '\n';
+
     BigNumber finalNumber;
 
     short remainingDecimalValue(0);
@@ -693,22 +709,22 @@ BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2)
         finalNumber.decimalPart = comp2.decimalPart;
         finalNumber.lastDecimalPartPower = comp2.lastDecimalPartPower;
 
-        for (int i(comp1.decimalPart.size() - 1) ; i >= 1 ; i--)//We live room for 0
+        for (int i(comp1.decimalPart.size() - 1) ; i >= 0 ; i--)//We live room for 0
         {
-            finalNumber.decimalPart[i] += comp1.decimalPart[i];
+            if (i == comp1.decimalPart.size() - 1)
+                finalNumber.decimalPart[i] += comp1.evaluateLastDecimal();
+            else
+                finalNumber.decimalPart[i] += comp1.decimalPart[i];
 
             if (finalNumber.decimalPart[i] > 9999)
             {
-                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                if (i == 0)
+                    remainingDecimalValue += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                else
+                    finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+
                 finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
             }
-        }
-
-        finalNumber.decimalPart[0] += comp1.evaluateLastDecimal();
-        if (finalNumber.decimalPart[0] > 9999)
-        {
-            remainingDecimalValue = (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000))/ 10000;
-            finalNumber.decimalPart[0] -= (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000));
         }
     }
     else if (comp1.decimalPart.size() > comp2.decimalPart.size())
@@ -716,66 +732,56 @@ BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2)
         finalNumber.decimalPart = comp1.decimalPart;
         finalNumber.lastDecimalPartPower = comp1.lastDecimalPartPower;
 
-        for (int i(comp2.decimalPart.size() - 1) ; i >= 1 ; i--)//We live room for 0
+        for (int i(comp2.decimalPart.size() - 1) ; i >= 0 ; i--)//We live room for 0
         {
-            finalNumber.decimalPart[i] += comp2.decimalPart[i];
+            if (i == comp2.decimalPart.size() - 1)
+                finalNumber.decimalPart[i] += comp2.evaluateLastDecimal();
+            else
+                finalNumber.decimalPart[i] += comp2.decimalPart[i];
 
             if (finalNumber.decimalPart[i] > 9999)
             {
-                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                if (i == 0)
+                    remainingDecimalValue += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                else
+                    finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+
                 finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
             }
-        }
-
-        finalNumber.decimalPart[0] += comp2.evaluateLastDecimal();
-        if (finalNumber.decimalPart[0] > 9999)
-        {
-            remainingDecimalValue = (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000))/ 10000;
-            finalNumber.decimalPart[0] -= (finalNumber.decimalPart[0] - (finalNumber.decimalPart[0] % 10000));
         }
     }
     else //Both have the same size
     {
         finalNumber.decimalPart = comp1.decimalPart;
+        short lastValue = 0;
 
-        short lastPart = comp1.evaluateLastDecimal() + comp2.evaluateLastDecimal();
-
-        if (comp1.decimalPart.size() > 1)
+        for (int i(comp2.decimalPart.size() - 1) ; i >= 0 ; i--)//We live room for 0
         {
-            if (lastPart > 9999)
+            if (i == comp2.decimalPart.size() - 1)
             {
-                finalNumber.decimalPart[finalNumber.decimalPart.size() - 2] += (lastPart - (lastPart % 10000))/ 10000;
-                lastPart -= (lastPart - (lastPart % 10000));
+                lastValue = comp1.evaluateLastDecimal() + comp2.evaluateLastDecimal();
+
+                if (lastValue > 9999)
+                {
+                    finalNumber.lastDecimalPartPower = MAX_DIGIT_NUMBER - std::ceil(std::log10(lastValue - 10000));
+                }
+
+                finalNumber.decimalPart[comp2.decimalPart.size() - 1] = lastValue;
             }
-
-            finalNumber.decimalPart[finalNumber.decimalPart.size() - 1] = lastPart;
-            finalNumber.lastDecimalPartPower = MAX_DIGIT_NUMBER - static_cast<int>(std::log10(lastPart) + 1);
-        }
-
-        for (int i(comp2.decimalPart.size() - 2) ; i >= 1 ; i--)//We leave room for 0
-        {
-            finalNumber.decimalPart[i] += comp2.decimalPart[i];
+            else
+                finalNumber.decimalPart[i] += comp2.decimalPart[i];
 
             if (finalNumber.decimalPart[i] > 9999)
             {
-                finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                if (i == 0)
+                    remainingDecimalValue += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+                else
+                    finalNumber.decimalPart[i - 1] += (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000))/ 10000;
+
                 finalNumber.decimalPart[i] -= (finalNumber.decimalPart[i] - (finalNumber.decimalPart[i] % 10000));
             }
         }
-
-        if (comp1.decimalPart.size() == 1)
-        {
-            if (lastPart > 9999)
-            {
-                remainingDecimalValue = (lastPart - (lastPart % 10000))/ 10000;
-                lastPart -= (lastPart - (lastPart % 10000));
-            }
-
-            finalNumber.decimalPart[0] = lastPart;
-            finalNumber.lastDecimalPartPower = MAX_DIGIT_NUMBER - static_cast<int>(std::log10(lastPart) + 1);
-        }
     }
-
 
     if (comp1.intPart.size() < comp2.intPart.size())
     {
@@ -833,4 +839,7 @@ BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2)
     return finalNumber;
 }
 
+BigNumber operator-(BigNumber const& comp1, BigNumber const& comp2)
+{
 
+}
