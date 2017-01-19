@@ -843,3 +843,38 @@ BigNumber operator-(BigNumber const& comp1, BigNumber const& comp2)
 {
 
 }
+
+using namespace boost::multiprecision;
+
+number<gmp_float<0> > BigNumber::convertBigNumber() const
+{
+
+    number<gmp_float<0> > toReturn;
+    toReturn = 0;
+    toReturn.precision(numberOfIntegerDigits + numberOfDecimalDigits);
+
+    mpz_int powerOfTen = 1;
+
+    //The int part
+    for (int i(0) ; i < intPart.size() ; i++, powerOfTen *= 10000)
+    {
+        toReturn += (intPart[i] * powerOfTen);
+    }
+
+
+    number<gmp_float<0> > yourFloat(0);
+    yourFloat.precision(numberOfDecimalDigits);
+
+    yourFloat += evaluateLastDecimal();
+    yourFloat /= 10000;
+    for (int i(decimalPart.size() - 2) ; i >= 0 ; i--)
+    {
+        yourFloat += decimalPart[i];
+        yourFloat /= 10000;
+    }
+
+    toReturn += yourFloat;
+
+    return toReturn;
+}
+

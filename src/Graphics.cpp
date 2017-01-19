@@ -1,18 +1,22 @@
 
 #include "Graphics.hpp"
 
-
+bool displayPoints;
+bool displayLines;
 
 bool launch()
 {
+    displayLines = true;
+    displayPoints = true;
+
     sf::RenderWindow myWindow(sf::VideoMode(800, 640), "Draw big numbers", sf::Style::Fullscreen);
     sf::Event event;
     sf::Clock imGuiClock;
 
-    std::vector<BigNumber> mySet;
+    std::vector<number<gmp_float<0>>> mySet;
     std::string currentDirectory;
 
-    int currentPowerOfTen(0);//Means that the screen length = 1, half the screen length = 1/2...
+    float currentPowerOfTen(1);
 
     float zoomFactor(1.0);
 
@@ -28,9 +32,16 @@ bool launch()
     keyWait.restart();
 
     BigNumber numberScale;
-    sf::Vector2i coordinates(-30, 30);
 
     bool stop(false);
+
+    number<gmp_float<20000>> posX(0);
+    number<gmp_float<20000>> posY(0);
+
+    int numberToReach(0);
+
+    number<gmp_float<0>> powerOfTen(10);
+
 
     do
     {
@@ -46,17 +57,19 @@ bool launch()
             ImGui::SFML::ProcessEvent(event);
         }
 
+        powerOfTen.precision(std::abs(currentPowerOfTen));
+
         if (keyWait.getElapsedTime().asSeconds() >= 0.01)
         {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
-                coordinates.x -= SPEED;
+                posX -= SPEED;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
-                coordinates.x += SPEED;
+                posX += SPEED;
 
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
-                coordinates.y += SPEED;
+                posY -= SPEED * boost::multiprecision::pow(powerOfTen, currentPowerOfTen);
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
-                coordinates.y -= SPEED;
+                posY += SPEED * boost::multiprecision::pow(powerOfTen, currentPowerOfTen);
 
             keyWait.restart();
         }
@@ -82,17 +95,39 @@ bool launch()
             }
 
             interfaceString.str(std::string());
-            interfaceString << "Current coordinates :("<< coordinates.x << ';' << coordinates.y << "e" << currentPowerOfTen << ")\n";
+            interfaceString << "Current coordinates :("<< posX << ';' << posY << ")\n";
             ImGui::Text(interfaceString.str().c_str());
 
-            ImGui::InputFloat("Zoom factor", &zoomFactor);
+            ImGui::InputFloat("Zoom factor", &currentPowerOfTen);
+            if (currentPowerOfTen > INT_MAX/10)
+                currentPowerOfTen = INT_MAX/10;
+
+            if (currentPowerOfTen < INT_MIN/10)
+                currentPowerOfTen = INT_MIN/10;
 
             ImGui::InputInt("Space between points x-axis", &HORIZONTAL_AXIS_SIZE);
 
+            ImGui::Checkbox("Display points", &displayPoints);
+            ImGui::Checkbox("Display lines", &displayLines);
+
+            if (mySet.size())
+            {
+                ImGui::InputInt("Number to reach", &numberToReach);
+                if (numberToReach < 0)
+                    numberToReach = 0;
+                else if (numberToReach >= mySet.size())
+                    numberToReach = mySet.size() - 1;
+
+                if (ImGui::Button("Reach number"))
+                {
+                    posX = ((numberToReach+1) * HORIZONTAL_AXIS_SIZE);
+                    posY = mySet[numberToReach];
+                }
+            }
+
             if (ImGui::Button("Write sorted array to a debug.txt"))
             {
-                for (int i(0) ; i < mySet.size() ; i++)
-                    mySet[i].writeToFile("debug.txt");
+                writeSortedArray(mySet, "debug.txt");
             }
 
             if (ImGui::Button("Stop program"))
@@ -104,10 +139,8 @@ bool launch()
         myWindow.clear(sf::Color(255, 255, 255));
 
 
-            if (zoomFactor != 0)
-                drawNumbers(mySet, myWindow, zoomFactor, coordinates, numberScale);
-            else
-                drawNumbers(mySet, myWindow, 1.0, coordinates, numberScale);
+            drawNumbers(mySet, myWindow, currentPowerOfTen, posX, posY);
+
 
             ImGui::Render();
 
@@ -120,7 +153,7 @@ bool launch()
     return true;
 }
 
-bool loadNewSet(std::vector<BigNumber>& allNumbers, std::string const& newFilePath)
+bool loadNewSet(std::vector<number<gmp_float<0>>>& allNumbers, std::string const& newFilePath)
 {
     int newSetSize(0);
 
@@ -137,7 +170,7 @@ bool loadNewSet(std::vector<BigNumber>& allNumbers, std::string const& newFilePa
     for (int i(0) ; i < newSetSize ; i++)
     {
         temp.loadFromFile(newFilePath, i);
-        allNumbers.push_back(temp);
+        allNumbers.push_back(temp.convertBigNumber());
     }
 
     std::sort(allNumbers.begin(), allNumbers.end());//We then sort the array
@@ -145,127 +178,89 @@ bool loadNewSet(std::vector<BigNumber>& allNumbers, std::string const& newFilePa
     return true;
 }
 
-void drawNumbers(std::vector<BigNumber> const& allNumbers, sf::RenderWindow const& targetWindow,
-                 float zoomFactor, sf::Vector2i const& pos, BigNumber& numberScale)
+bool writeSortedArray(std::vector<number<gmp_float<0>>> const& allNumbers, std::string filePath)
 {
-    sf::CircleShape point;
-    point.setRadius(8);
+    std::ofstream fileToStream;
+    fileToStream.open(filePath.c_str(), std::ios::app);
 
-    std::vector<BigNumber> allScales;//The value of each graduation
-    std::vector<double> coordinatesY;//Y coordinates of every big number visible
-
-    int firstDifference = 0;
-    double min(0.0);
-    double max(0.0);
-
-    std::stringstream unitScale;
-    numberScale.changeNumber("0.0");//Value of one scale
-
-    long canvasHeight = static_cast<long>(zoomFactor * targetWindow.getSize().y);
-    long numberOfGraduations = canvasHeight;
-
-    //We print the axis
-    sf::RectangleShape axis;
-    axis.setFillColor(sf::Color(0,0,0));
-
-    if (pos.x < 0 && pos.x > targetWindow.getSize().x)
+    if (!fileToStream)
     {
-        axis.setPosition( -pos.x, 0);
-        axis.setSize(sf::Vector2f(AXIS_WIDTH, targetWindow.getSize().y));
-        targetWindow.draw(axis);
+        std::cout << "Couldn't write in debug file : file opening failed (file path : '" << filePath << "'.\n";
+        return false;
     }
-
-    if (pos.y > 0 && pos.y < targetWindow.getSize().y)
+    else
     {
-        axis.setPosition(0, targetWindow.getSize().y - pos.y);
-        axis.setSize(sf::Vector2f(targetWindow.getSize().x, AXIS_WIDTH));
-        targetWindow.draw(axis);
+        for (int i(0); i < allNumbers.size() ; i++)
+        {
+            fileToStream << std::setprecision(std::numeric_limits<decltype(allNumbers[i])>::digits10) << allNumbers[i] << '\n';
+        }
     }
+}
 
-    //Since the array is sorted, we can safely assume that the first element is the smallest, and the last is the biggest. We'll use that for comparison
+void drawNumbers(std::vector<number<gmp_float<0>>> const& allNumbers, sf::RenderWindow const& targetWindow,
+                 float powerOfTenZoom, number<gmp_float<0>> posX, number<gmp_float<0>> posY)
+{
     if (allNumbers.size() > 0)
     {
+        sf::CircleShape point;
+        point.setRadius(8);
+        point.setFillColor(sf::Color(255,0,0));
 
-        for (firstDifference = 0 ; allNumbers[0].getPowerOfTenDigit(firstDifference) == allNumbers[allNumbers.size() - 1].getPowerOfTenDigit(firstDifference) ; firstDifference--);
-
-        //We then take 6 digits, for maximum precision on as much screen as possible
-
-        for (int i(0); i < 6 ; i++)
-        {
-            max += allNumbers[allNumbers.size() - 1].getPowerOfTenDigit(firstDifference - i) / std::pow(10, i);
-            min += allNumbers[0].getPowerOfTenDigit(firstDifference - i) / std::pow(10, i);
-        }
-        unitScale << "0.";
-
-        for (int i(0) ; i < std::abs((firstDifference) + std::log10((max - min) / numberOfGraduations)) - 1 ; i++)
-            unitScale << '0';
-
-        std::stringstream tempString;
-        tempString <<  ((max - min) / numberOfGraduations);
-        unitScale << tempString.str().substr(2 + std::abs(std::log10((max - min) / numberOfGraduations)));
-
-        numberScale.changeNumber(unitScale.str());
-
-        allScales.push_back(BigNumber(allNumbers[0]));
-
-        for (int i(1) ; i < numberOfGraduations ; i++)
-        {
-            allScales.push_back( numberScale + allScales[i - 1]);
-
-        }
+        unsigned int biggestPrecision(0);
 
         for (int i(0) ; i < allNumbers.size() ; i++)
         {
-            if (allNumbers[i] < allScales[0])
-            { //Under the scale, shouldn't happen
-                coordinatesY.push_back(-1);
-                //std::cout << "Under the scale\n";
-            }
-            else if (allNumbers[i] > allScales[allScales.size() - 1])
-            { //Above the scale, shouldn't happen either
-
-                coordinatesY.push_back(1.1);
-                //std::cout << "Above the scale\n";
-            }
-            else
-            {
-                for (int j(0) ; j < allScales.size() - 1; j++)
-                {
-                    if ((allNumbers[i] >= allScales[j]) && (allNumbers[i] <= allScales[j + 1]))
-                    {
-
-                        coordinatesY.push_back(((float)j / numberOfGraduations));
-                        break;
-                    }
-                }
-            }
+            if (allNumbers[i].precision() > biggestPrecision)
+                biggestPrecision = allNumbers[i].precision();
         }
+
+        number<gmp_float<0>> oneGrad(0);
+        number<gmp_float<0>> minScreenY(0);
+        number<gmp_float<0>> maxScreenY(0);
+        oneGrad.precision(biggestPrecision);
+        minScreenY.precision(biggestPrecision);
+        maxScreenY.precision(biggestPrecision);
+
+        number<gmp_float<0>> powerOfTen(10);
+        powerOfTen.precision(std::abs(powerOfTenZoom));
+
+        oneGrad = boost::multiprecision::pow(powerOfTen, powerOfTenZoom);
+
+        minScreenY = posY;
+        maxScreenY = minScreenY + oneGrad * targetWindow.getSize().y;
+
+        number<gmp_float<0>> positionY(0);
+        number<gmp_float<0>> positionX(0);
+        positionX.precision(biggestPrecision);
+        positionY.precision(biggestPrecision);
+
+        sf::Vector2f position;
+
+        sf::VertexArray linesVertices(sf::LinesStrip, allNumbers.size() );
+
+
 
         for (int i(0) ; i < allNumbers.size() ; i++)
         {
-            sf::Vector2f position;
+                positionX = ((i+1) * HORIZONTAL_AXIS_SIZE) - posX;
+                positionY = targetWindow.getSize().y - (((allNumbers[i] - minScreenY) / (maxScreenY - minScreenY)) * targetWindow.getSize().y) + posY;
 
+                positionX -= point.getRadius();
+                positionY -= point.getRadius();
 
-            position.x = ((i + 1) * HORIZONTAL_AXIS_SIZE) - point.getRadius() - pos.x;
-            position.y = targetWindow.getSize().y - coordinatesY[i] * canvasHeight - point.getRadius() - pos.y;
-            point.setFillColor(sf::Color(255, 0, 0));
+                position.x = positionX.convert_to<float>();
+                position.y = positionY.convert_to<float>();
 
-            if (position.x < - point.getRadius())
-            {
-                position.x = - point.getRadius();
-                point.setFillColor(sf::Color(255, 50, 255));
-            }
-            else if (position.x > targetWindow.getSize().x - point.getRadius())
-            {
-                position.x = targetWindow.getSize().x - point.getRadius();
-                point.setFillColor(sf::Color(255, 50, 255));
-            }
+                linesVertices[i ].position = sf::Vector2f(position.x + point.getRadius(), position.y + point.getRadius());
+                linesVertices[i ].color = sf::Color::Blue;
 
-            point.setPosition(position.x, position.y);
+                point.setPosition(position);
 
-
-            targetWindow.draw(point);
+                if (displayPoints)
+                    targetWindow.draw(point);
         }
 
+        if (displayLines)
+            targetWindow.draw(linesVertices);
     }
 }

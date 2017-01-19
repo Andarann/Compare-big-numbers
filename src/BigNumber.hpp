@@ -9,8 +9,13 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <boost/multiprecision/mpfr.hpp>
+#include <boost/multiprecision/cpp_dec_float.hpp>
+#include <boost/multiprecision/gmp.hpp>
 
 #define MAX_DIGIT_NUMBER 4//Defines the maximum number of digits of one space of the vector
+
+using namespace boost::multiprecision;
 
 class BigNumber{
 public:
@@ -24,6 +29,7 @@ public:
 
     static int numberQuantityInFile(std::string filePath);//Careful : currently a crappy function only counting the number of lines in a program (supposed to be similar, but what if there are parasites ?)
 
+    long getDigitNumedr() {return numberOfDecimalDigits + numberOfIntegerDigits;};
 
     void changeIntPart(std::string const& newIntPart);
     void changeDecimalPart(std::string const& newDecimalPart);
@@ -142,6 +148,8 @@ public:
     friend bool operator!=(BigNumber const& comp1, BigNumber const& comp2);
     friend BigNumber operator+(BigNumber const& comp1, BigNumber const& comp2);
     friend std::ostream& operator<<(std::ostream& os, const BigNumber& toStream);
+
+    number<gmp_float<0> > convertBigNumber() const;
 private:
     /**Each short contains a value ranging from 0 to 9999.
     If the value is superior to 9999, then we add the superficial value the next
